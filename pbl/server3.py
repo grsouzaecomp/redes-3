@@ -334,6 +334,53 @@ def local_events():
     return jsonify([{"event_id": e[0], "odds": eval(e[1])} for e in events]), 200
   return jsonify([]), 200
 
+@app.route('/resolve_event', methods=['POST'])
+def resolve_event():
+  data = request.json
+  event_id = data["event_id"]
+  result = data["result"]
+
+  # Verificar se o evento existe
+  event = execute_query(
+    "SELECT id FROM events WHERE event_id = ?",
+    (event_id,),
+    fetch_one=True
+  )
+  if not event:
+    return jsonify({"error": "Evento não encontrado"}), 404
+
+  event_id_db = event[0]
+
+  # Resolver o evento
+  try:
+    # Obter todas as apostas associadas ao evento
+    bets = execute_query(
+      "SELECT user_id, bet_option, amount FROM bets WHERE event_id = ?",
+      (event_id_db,),
+      fetch_all=True
+    )
+
+    # Pagar apostas vencedoras
+    for bet in bets:
+      user_id, bet_option, amount = bet
+      if bet_option == result:
+        # Atualizar saldo do usuário
+        execute_query(
+            "UPDATE users SET balance = balance + ? WHERE id = ?",
+            (amount * 2, user_id)
+        )
+
+    # Remover apostas e evento
+    execute_query("DELETE FROM bets WHERE event_id = ?", (event_id_db,))
+    execute_query("DELETE FROM events WHERE id = ?", (event_id_db,))
+
+    # Propagar resolução para outros servidores
+    propagate_change("resolve_event", {"event_id": event_id, "result": result})
+    return jsonify({"message": "Evento resolvido com sucesso!"}), 200
+
+  except Exception as e:
+    print(f"Erro ao resolver evento: {e}")
+    return jsonify({"error": "Erro interno do servidor"}), 500
 
 @app.route('/place_bet', methods=['POST'])
 def place_bet():

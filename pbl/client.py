@@ -129,11 +129,18 @@ class BettingClient:
 
   def resolve_event(self, event_id, result):
     payload = {"event_id": event_id, "result": result}
-    response = requests.post(f"{self.server_url}/resolve_event", json=payload)
-    if response.status_code == 200:
-      print("Evento resolvido com sucesso!")
-    else:
-      print(f"Erro ao resolver evento: {response.json().get('error')}")
+    try:
+      response = requests.post(f"{self.server_url}/resolve_event", json=payload)
+      if response.status_code == 200:
+        print(response.json().get("message", "Evento resolvido com sucesso!"))
+      else:
+        error_message = response.json().get("error", "Erro desconhecido")
+        print(f"Erro ao resolver evento: {error_message}")
+    except requests.exceptions.JSONDecodeError:
+      print("Erro: Resposta inválida do servidor. Tente novamente.")
+    except requests.exceptions.RequestException as e:
+      print(f"Erro de conexão com o servidor: {e}")
+
 
 # Menu do cliente
 def main():
